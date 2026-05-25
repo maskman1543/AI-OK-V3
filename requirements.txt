@@ -1,0 +1,6 @@
+pyyaml
+openai-whisper
+sounddevice
+sentence-transformers
+pypdf
+

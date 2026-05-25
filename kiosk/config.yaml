@@ -1,0 +1,36 @@
+stt:
+  engine: "openai-whisper"
+  cli_path: "whisper"
+  model_name: "medium"
+  model_dir: "kiosk/models/whisper"
+  model_path: ""
+  language: null
+  task: "transcribe"
+  sample_rate: 16000
+  channels: 1
+  sample_width: 2
+  recordings_dir: "kiosk/data/recordings"
+  extra_args: []
+
+rag:
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  index_path: "kiosk/data/index.json"
+  top_k: 4
+
+llm:
+  model_path: ""
+  n_ctx: 4096
+  max_tokens: 512
+  temperature: 0.2
+
+tts:
+  binary_path: ""
+  voice_path: ""
+  output_file: "kiosk/data/last_response.wav"
+  playback_command:
+    - "aplay"
+  extra_args: []
+
+thresholds:
+  vad_silence_ms: 800
+  min_retrieval_score: 0.2
