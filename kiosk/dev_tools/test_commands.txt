@@ -1,0 +1,34 @@
+# List available microphone/input devices.
+
+#command
+python -m kiosk.dev_tools.stt_to_ollama_cli --devices
+
+# Test Ollama only with a typed transcript, without recording or Whisper.
+
+#command
+python -m kiosk.dev_tools.stt_to_ollama_cli --text "Maayong buntag, unsa imong matabang karon?"
+
+# Test Ollama only with a typed transcript and a specific model.
+
+#command
+python -m kiosk.dev_tools.stt_to_ollama_cli --text "Maayong buntag, unsa imong matabang karon?" --model gemma3:4b
+
+# Test a saved WAV file through Whisper STT, then send the transcript to Ollama.
+
+#command
+python -m kiosk.dev_tools.stt_to_ollama_cli kiosk\data\recordings\cebuano_test.wav
+
+# Record 5 seconds from the working laptop microphone device, save a WAV, transcribe it, then send it to Ollama.
+
+#command
+python -m kiosk.dev_tools.stt_to_ollama_cli --record 5 --output kiosk\data\recordings\manual_test.wav --device 2
+
+# Push-to-talk test using the working laptop microphone device, then transcribe and send to Ollama.
+
+#command
+python -m kiosk.dev_tools.stt_to_ollama_cli --push-to-talk --output kiosk\data\recordings\push_to_talk.wav --device 2
+
+# Push-to-talk test using the working laptop microphone device and a specific Ollama model.
+
+#command
+python -m kiosk.dev_tools.stt_to_ollama_cli --push-to-talk --output kiosk\data\recordings\push_to_talk.wav --device 2 --model gemma3:4b

@@ -7,6 +7,7 @@ are ordinary Python calls so a future web UI can reuse the same STT path.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import tempfile
@@ -27,7 +28,9 @@ class WhisperWorker:
         self.engine = config.get("engine", "openai-whisper")
         self.cli_path = config.get("cli_path") or config.get("binary_path") or "whisper"
         self.model_name = config.get("model_name", "base")
+        self.model_dir = config.get("model_dir")
         self.model_path = config.get("model_path")
+        self.ffmpeg_path = config.get("ffmpeg_path")
         self.language = config.get("language", "en")
         self.task = config.get("task", "transcribe")
         self.sample_rate = int(config.get("sample_rate", 16000))
@@ -56,7 +59,7 @@ class WhisperWorker:
         """Capture microphone input into a mono WAV file."""
 
         try:
-            import exit as sd
+            import sounddevice as sd
         except ImportError as exc:  # pragma: no cover - depends on deployment
             raise RuntimeError(
                 "Install sounddevice for microphone capture: pip install sounddevice"
@@ -98,6 +101,49 @@ class WhisperWorker:
 
         return output
 
+    def record_until_stop(
+        self,
+        stop_event: Any,
+        output_path: str | Path | None = None,
+        device: int | str | None = None,
+    ) -> Path:
+        """Capture microphone input into a WAV file until stop_event is set."""
+
+        try:
+            import sounddevice as sd
+        except ImportError as exc:  # pragma: no cover - depends on deployment
+            raise RuntimeError(
+                "Install sounddevice for microphone capture: pip install sounddevice"
+            ) from exc
+
+        output = Path(output_path) if output_path else self._default_recording_path()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        input_device = _parse_device(device)
+
+        with wave.open(str(output), "wb") as wav_file:
+            wav_file.setnchannels(self.channels)
+            wav_file.setsampwidth(self.sample_width)
+            wav_file.setframerate(self.sample_rate)
+
+            def callback(indata, _frame_count, _time, status) -> None:
+                if status:
+                    print(status)
+                wav_file.writeframes(indata)
+
+            block_size = min(1024, self.sample_rate)
+            with sd.RawInputStream(
+                samplerate=self.sample_rate,
+                blocksize=block_size,
+                device=input_device,
+                channels=self.channels,
+                dtype="int16",
+                callback=callback,
+            ):
+                while not stop_event.is_set():
+                    sd.sleep(100)
+
+        return output
+
     def transcribe_microphone(
         self,
         duration_seconds: float = 5.0,
@@ -121,28 +167,46 @@ class WhisperWorker:
 
     def _transcribe_openai_whisper(self, audio_path: Path) -> str:
         cli_path = self._resolve_cli()
+        ffmpeg_path = self._resolve_ffmpeg()
+        if ffmpeg_path is None:
+            raise RuntimeError(
+                "ffmpeg is required by openai-whisper but was not found on PATH"
+            )
         with tempfile.TemporaryDirectory(prefix="kiosk-whisper-") as output_dir:
             command = [
                 cli_path,
                 str(audio_path),
                 "--model",
                 self.model_name,
-                "--language",
-                self.language,
                 "--task",
                 self.task,
                 "--output_format",
                 "txt",
                 "--output_dir",
                 output_dir,
-                *self.extra_args,
             ]
-            completed = subprocess.run(command, check=True, capture_output=True, text=True)
+            if self.language:
+                command.extend(["--language", self.language])
+            if self.model_dir:
+                command.extend(["--model_dir", self.model_dir])
+            command.extend(self.extra_args)
+            env = os.environ.copy()
+            if ffmpeg_path:
+                ffmpeg_dir = str(Path(ffmpeg_path).parent)
+                env["PATH"] = f"{ffmpeg_dir}{os.pathsep}{env.get('PATH', '')}"
+            completed = subprocess.run(command, check=True, capture_output=True, text=True, env=env)
 
             transcript_file = Path(output_dir) / f"{audio_path.stem}.txt"
             if transcript_file.exists():
                 return transcript_file.read_text(encoding="utf-8").strip()
             return completed.stdout.strip()
+
+    def _resolve_ffmpeg(self) -> str | None:
+        if self.ffmpeg_path:
+            configured = Path(self.ffmpeg_path)
+            if configured.exists():
+                return str(configured)
+        return shutil.which("ffmpeg")
 
     def _transcribe_whisper_cpp(self, audio_path: Path) -> str:
         cli_path = self._resolve_cli()
@@ -170,6 +234,9 @@ class WhisperWorker:
         configured = Path(self.cli_path)
         if configured.exists():
             return str(configured)
+        venv_cli = Path("venv") / "Scripts" / f"{self.cli_path}.exe"
+        if venv_cli.exists():
+            return str(venv_cli)
         raise RuntimeError(f"Whisper CLI not found: {self.cli_path}")
 
     def _default_recording_path(self) -> Path:

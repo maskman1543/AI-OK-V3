@@ -4,6 +4,7 @@ stt:
   model_name: "medium"
   model_dir: "kiosk/models/whisper"
   model_path: ""
+  ffmpeg_path: ""
   language: null
   task: "transcribe"
   sample_rate: 16000
@@ -22,6 +23,13 @@ llm:
   n_ctx: 4096
   max_tokens: 512
   temperature: 0.2
+
+ollama:
+  host: "http://127.0.0.1:11434"
+  model: "gemma3:4b"
+  max_tokens: 256
+  temperature: 0.2
+  system: "You are a concise kiosk assistant. If the user speaks Cebuano or mixed Cebuano and English, respond naturally in the same style. Answer only the current user message."
 
 tts:
   binary_path: ""
