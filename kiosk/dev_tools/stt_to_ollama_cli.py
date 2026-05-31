@@ -7,8 +7,9 @@ import sys
 import threading
 from pathlib import Path
 
-from kiosk.stt_ollama_bridge import SttOllamaBridge, SttOllamaResult
+from kiosk.stt_ollama_bridge import SttOllamaBridge, SttOllamaResult, load_config
 from kiosk.stt.whisper_worker import list_input_devices
+from kiosk.tts.piper_worker import PiperConfigError, PiperWorker
 
 
 def run_bridge(
@@ -71,6 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default=None, help="WAV path for --record or --push-to-talk")
     parser.add_argument("--device", default=None, help="Input device id or name for recording")
     parser.add_argument("--devices", action="store_true", help="List input devices and exit")
+    parser.add_argument("--speak", action="store_true", help="Speak the Ollama answer with TTS")
     return parser
 
 
@@ -100,6 +102,13 @@ def main() -> None:
     print("Ollama:")
     print(result.answer)
     print(f"LLM response time: {result.llm_seconds:.2f}s")
+
+    if args.speak:
+        config = load_config(args.config)
+        try:
+            PiperWorker(config.get("tts", {})).speak(result.answer)
+        except PiperConfigError as exc:
+            raise SystemExit(f"TTS setup is incomplete.\n{exc}") from None
 
 
 if __name__ == "__main__":

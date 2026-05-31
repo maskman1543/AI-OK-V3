@@ -13,6 +13,26 @@ python -m kiosk.dev_tools.stt_to_ollama_cli --text "Maayong buntag, unsa imong m
 #command
 python -m kiosk.dev_tools.stt_to_ollama_cli --text "Maayong buntag, unsa imong matabang karon?" --model gemma3:4b
 
+# Test TTS only, using the configured TTS engine.
+
+#command
+python -m kiosk.dev_tools.tts_cli --text "Maayong buntag, andam na ko motubag."
+
+# Install Piper for Windows with the Amy medium voice.
+
+#command
+powershell -ExecutionPolicy Bypass -File kiosk\dev_tools\setup_piper_windows.ps1
+
+# Generate a TTS WAV without playing it.
+
+#command
+python -m kiosk.dev_tools.tts_cli --text "Maayong buntag, andam na ko motubag." --output kiosk\data\last_response.wav --no-play
+
+# Test Ollama with a typed transcript, then speak the answer with TTS.
+
+#command
+python -m kiosk.dev_tools.stt_to_ollama_cli --text "Maayong buntag, unsa imong matabang karon?" --speak
+
 # Test a saved WAV file through Whisper STT, then send the transcript to Ollama.
 
 #command
