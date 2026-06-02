@@ -32,16 +32,15 @@ ollama:
   system: "You are a concise kiosk assistant. If the user speaks Cebuano or mixed Cebuano and English, respond naturally in the same style. Answer only the current user message."
 
 tts:
-  # Use "windows-sapi" for built-in Windows speech, or "piper" for Piper voices.
+  # Use Piper on Windows and Raspberry Pi.
+  # Leave binary_path empty to auto-detect:
+  #   Windows: kiosk/models/piper/bin/piper.exe or piper.exe on PATH
+  #   Linux/Raspberry Pi: kiosk/models/piper/bin/piper or piper on PATH
   engine: "piper"
-  binary_path: "kiosk/models/piper/bin/piper.exe"
+  binary_path: ""
   voice_path: "kiosk/models/piper/voices/en_US-amy-medium.onnx"
   output_file: "kiosk/data/last_response.wav"
-  playback_command:
-    - "powershell.exe"
-    - "-NoProfile"
-    - "-Command"
-    - "& { param($wav) (New-Object Media.SoundPlayer $wav).PlaySync() }"
+  playback_command: "auto"
   extra_args: []
 
 thresholds:
