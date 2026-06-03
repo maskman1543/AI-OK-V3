@@ -1,0 +1,51 @@
+/* Radix UI Themes — must come first */
+@import "@radix-ui/themes/styles.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Kiosk resets ───────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  cursor: none;
+}
+
+input, textarea {
+  user-select: text;
+  cursor: text;
+}
+
+.scroll-area {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Touch button base ──────────────────────────────────── */
+@layer components {
+  .btn-touch {
+    @apply min-h-[48px] min-w-[48px] px-6 py-3
+           rounded-2xl font-semibold
+           text-kiosk-base
+           active:scale-95 transition-transform duration-100
+           focus:outline-none focus-visible:ring-4;
+  }
+  .btn-primary {
+    @apply btn-touch bg-teal-500 text-white
+           hover:bg-teal-400 active:bg-teal-600;
+  }
+  .btn-secondary {
+    @apply btn-touch bg-white/10 text-white
+           hover:bg-white/20 border border-white/20;
+  }
+}
