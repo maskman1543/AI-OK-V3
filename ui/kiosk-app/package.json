@@ -1,0 +1,49 @@
+{
+  "name": "kiosk-app",
+  "version": "1.0.0",
+  "description": "Offline AI Kiosk — Electron + React + Vite + Tailwind + Radix UI",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "build": "vite build",
+    "build:electron": "vite build && electron-builder",
+    "preview": "vite preview",
+    "electron": "electron ."
+  },
+  "build": {
+    "appId": "com.kiosk.app",
+    "productName": "KioskApp",
+    "linux": {
+      "target": "deb",
+      "category": "Utility"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    }
+  },
+  "dependencies": {
+    "@radix-ui/themes": "^3.0.0",
+    "lucide-react": "^1.17.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "react-simple-keyboard": "^3.8.221"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.0.1",
+    "cross-env": "^7.0.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "wait-on": "^8.0.1"
+  }
+}

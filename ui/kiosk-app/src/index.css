@@ -1,0 +1,70 @@
+/* Radix UI Themes — must come first */
+@import "@radix-ui/themes/styles.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Kiosk resets ───────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  cursor: none;
+}
+
+input, textarea {
+  user-select: text;
+  cursor: text;
+}
+
+.scroll-area {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Touch button base ──────────────────────────────────── */
+@layer components {
+  .btn-touch {
+    @apply min-h-[48px] min-w-[48px] px-6 py-3
+           rounded-2xl font-semibold
+           text-kiosk-base
+           active:scale-95 transition-transform duration-100
+           focus:outline-none focus-visible:ring-4;
+  }
+  .btn-primary {
+    @apply btn-touch bg-teal-500 text-white
+           hover:bg-teal-400 active:bg-teal-600;
+  }
+  .btn-secondary {
+    @apply btn-touch bg-white/10 text-white
+           hover:bg-white/20 border border-white/20;
+  }
+}
+
+/* Increase overall button height and text size */
+.hg-theme-default .hg-button {
+  height: 70px !important; /* Adjust this value to make keys taller */
+  font-size: 1.5rem !important; /* Larger text for readability */
+  border-radius: 8px !important; /* Slightly rounder edges */
+  margin-bottom: 8px !important; /* More breathing room between rows */
+}
+
+/* Make action buttons (Enter, Shift, Backspace) stand out a bit more */
+.hg-theme-default .hg-button.hg-standardBtn {
+  font-weight: 500;
+}
+
+/* Optional: Make the keyboard background transparent so your Tailwind wrapper handles it */
+.hg-theme-default {
+  background-color: transparent !important;
+  padding: 10px !important;
+}
