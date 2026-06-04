@@ -13,6 +13,9 @@ except ImportError:  # pragma: no cover - optional runtime dependency
     yaml = None
 
 from kiosk.llm.ollama_worker import OllamaWorker
+from kiosk.rag.embedder import SentenceTransformerEmbedder
+from kiosk.rag.index import ChromaVectorIndex, VectorIndex
+from kiosk.rag.retriever import Retriever
 from kiosk.stt.whisper_worker import WhisperWorker
 
 
@@ -39,10 +42,25 @@ def load_config(config_path: str | Path) -> dict[str, Any]:
     return loaded
 
 
-def build_prompt(transcript: str) -> str:
+def build_prompt(transcript: str, context: list[dict[str, Any]] | None = None) -> str:
+    context = context or []
+    context_block = ""
+    if context:
+        snippets = []
+        for index, hit in enumerate(context, start=1):
+            source = hit.get("metadata", {}).get("source", "knowledge base")
+            snippets.append(f"[{index}] Source: {source}\n{hit.get('text', '')}")
+        context_block = (
+            "Use this knowledge-base context when it is relevant. "
+            "If it is not relevant, answer normally and do not mention it.\n\n"
+            + "\n\n".join(snippets)
+            + "\n\n"
+        )
+
     return (
         "Answer the user's spoken message once, clearly and briefly. "
         "Do not repeat the transcript. Do not invent facts.\n\n"
+        f"{context_block}"
         f"User transcript: {transcript}\n\n"
         "Answer:"
     )
@@ -63,6 +81,7 @@ class SttOllamaBridge:
         if model_override:
             ollama_config["model"] = model_override
         self.llm = OllamaWorker(ollama_config)
+        self.retriever = self._build_retriever()
 
     def answer_audio_file(self, audio_path: str | Path) -> SttOllamaResult:
         transcription_start = perf_counter()
@@ -82,8 +101,9 @@ class SttOllamaBridge:
         if not transcript:
             raise RuntimeError("Transcript is empty; nothing to send to Ollama")
 
+        context = self._retrieve_context(transcript)
         llm_start = perf_counter()
-        answer = self.llm.generate(build_prompt(transcript))
+        answer = self.llm.generate(build_prompt(transcript, context=context))
         llm_seconds = perf_counter() - llm_start
         return SttOllamaResult(
             transcript=transcript,
@@ -91,3 +111,29 @@ class SttOllamaBridge:
             transcription_seconds=transcription_seconds,
             llm_seconds=llm_seconds,
         )
+
+    def _build_retriever(self) -> Retriever | None:
+        rag_config = self.config.get("rag", {})
+        index_path = Path(rag_config.get("index_path", "kiosk/data/chroma"))
+        if not index_path.exists():
+            return None
+
+        embedder = SentenceTransformerEmbedder(rag_config.get("embedding_model"))
+        store = rag_config.get("store", "chroma")
+        if store == "json":
+            index = VectorIndex.load(index_path)
+        else:
+            index = ChromaVectorIndex.load(
+                index_path,
+                collection_name=rag_config.get("collection_name", "kiosk_kb"),
+            )
+        return Retriever(embedder, index, top_k=rag_config.get("top_k", 4))
+
+    def _retrieve_context(self, transcript: str) -> list[dict[str, Any]]:
+        if self.retriever is None:
+            return []
+        min_score = self.config.get("thresholds", {}).get("min_retrieval_score", 0.2)
+        try:
+            return [hit for hit in self.retriever.retrieve(transcript) if hit["score"] >= min_score]
+        except RuntimeError:
+            return []

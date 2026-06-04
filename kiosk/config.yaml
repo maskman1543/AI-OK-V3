@@ -19,7 +19,10 @@ stt:
 
 rag:
   embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
-  index_path: "kiosk/data/index.json"
+  index_path: "kiosk/data/chroma"
+  store: "chroma"
+  collection_name: "kiosk_kb"
+  converted_text_dir: "kiosk/data/converted_text"
   top_k: 4
 
 llm:
@@ -37,10 +40,10 @@ ollama:
 
 tts:
   # Use "windows-sapi", "piper", or "mms-cebuano" for offline Meta MMS Cebuano.
-  engine: "mms-cebuano"
+  engine: "piper"
   binary_path: "kiosk/models/piper/bin/piper.exe"
   voice_path: "kiosk/models/piper/voices/en_US-amy-medium.onnx"
-  model_name: "facebook/mms-1b-l1107"
+  model_name: "facebook/mms-tts-ceb"
   mms_language: "ceb"
   local_files_only: true
   output_file: "kiosk/data/last_response.wav"

@@ -16,7 +16,7 @@ class PiperConfigError(RuntimeError):
 def piper_config_help() -> str:
     return (
         "Configure TTS in kiosk/config.yaml:\n"
-        "  tts.engine: auto, windows-sapi, piper, or espeak\n"
+        "  tts.engine: auto, windows-sapi, piper, espeak, or mms-cebuano\n"
         "  tts.binary_path: optional full path to Piper, or leave empty to auto-detect\n"
         "  tts.voice_path: full path to a Piper .onnx voice file\n"
         "For Raspberry Pi, install a Linux Piper binary named `piper` on PATH or in "
@@ -31,6 +31,9 @@ class PiperWorker:
         self.engine = config.get("engine", "auto")
         self.binary_path = config.get("binary_path")
         self.voice_path = config.get("voice_path")
+        self.model_name = config.get("model_name", "facebook/mms-tts-ceb")
+        self.mms_language = config.get("mms_language", "ceb")
+        self.local_files_only = bool(config.get("local_files_only", False))
         self.output_file = config.get("output_file", "kiosk/data/last_response.wav")
         self.playback_command = config.get("playback_command", "auto")
         self.extra_args = config.get("extra_args", [])
@@ -49,6 +52,11 @@ class PiperWorker:
 
         if engine == "espeak":
             self._speak_espeak(text)
+            return
+
+        if engine == "mms-cebuano":
+            self._speak_mms_cebuano(text, output_path)
+            self._play(output_path)
             return
 
         if engine != "piper":
@@ -158,3 +166,40 @@ class PiperWorker:
         if not binary:
             raise PiperConfigError(piper_config_help())
         subprocess.run([binary, *self.extra_args, text], check=True, text=True)
+
+    def _speak_mms_cebuano(self, text: str, output_path: Path) -> None:
+        model_name = self.model_name
+        if model_name == "facebook/mms-1b-l1107":
+            model_name = "facebook/mms-tts-ceb"
+
+        try:
+            import torch
+            from scipy.io.wavfile import write as write_wav
+            from transformers import AutoTokenizer, VitsModel
+        except ImportError as exc:  # pragma: no cover - depends on deployment
+            raise PiperConfigError(
+                "Install transformers, torch, and scipy to use tts.engine: mms-cebuano."
+            ) from exc
+
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_name,
+                local_files_only=self.local_files_only,
+            )
+            model = VitsModel.from_pretrained(
+                model_name,
+                local_files_only=self.local_files_only,
+            )
+        except Exception as exc:
+            raise PiperConfigError(
+                f"Could not load MMS Cebuano TTS model `{model_name}`. "
+                "If this is the first run, set tts.local_files_only to false once "
+                "or download the model before using offline mode."
+            ) from exc
+
+        inputs = tokenizer(text, return_tensors="pt")
+        with torch.no_grad():
+            waveform = model(**inputs).waveform
+        audio = waveform.squeeze().cpu().numpy()
+        sampling_rate = int(getattr(model.config, "sampling_rate", 16000))
+        write_wav(output_path, sampling_rate, audio)
