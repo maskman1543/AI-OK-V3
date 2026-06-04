@@ -49,3 +49,22 @@ input, textarea {
            hover:bg-white/20 border border-white/20;
   }
 }
+
+/* Increase overall button height and text size */
+.hg-theme-default .hg-button {
+  height: 70px !important; /* Adjust this value to make keys taller */
+  font-size: 1.5rem !important; /* Larger text for readability */
+  border-radius: 8px !important; /* Slightly rounder edges */
+  margin-bottom: 8px !important; /* More breathing room between rows */
+}
+
+/* Make action buttons (Enter, Shift, Backspace) stand out a bit more */
+.hg-theme-default .hg-button.hg-standardBtn {
+  font-weight: 500;
+}
+
+/* Optional: Make the keyboard background transparent so your Tailwind wrapper handles it */
+.hg-theme-default {
+  background-color: transparent !important;
+  padding: 10px !important;
+}
