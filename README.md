@@ -1,5 +1,50 @@
 # AI-OK-V3
 
+## Knowledge-base ingestion
+
+The ingestion command converts supported files with Docling, writes the
+converted text to `kiosk/data/converted_text`, embeds text chunks with
+`sentence-transformers/all-MiniLM-L6-v2`, and stores them in a persistent
+ChromaDB collection at `kiosk/data/chroma`.
+
+Windows:
+
+```powershell
+venv\Scripts\python -m kiosk.ingestion.ingest path\to\document.pdf
+```
+
+Raspberry Pi 5:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+sudo apt install -y python3-dev build-essential cmake ffmpeg
+pip install -r requirements.txt
+python -m kiosk.ingestion.ingest path/to/document.pdf
+```
+
+Smoke-test with a small text file:
+
+```bash
+mkdir -p kiosk/data/smoke
+printf "AI OK kiosk opening hours are 8 AM to 5 PM." > kiosk/data/smoke/hours.txt
+python -m kiosk.ingestion.ingest kiosk/data/smoke/hours.txt
+ls kiosk/data/converted_text
+```
+
+Verify the Chroma collection:
+
+```bash
+python - <<'PY'
+import chromadb
+client = chromadb.PersistentClient(path="kiosk/data/chroma")
+collection = client.get_collection("kiosk_kb")
+print(collection.count())
+print(collection.peek(1)["documents"][0])
+PY
+```
+
 ## STT to Ollama CLI
 
 End-to-end push-to-talk voice test with stage runtimes and TTS playback:

@@ -15,7 +15,10 @@ stt:
 
 rag:
   embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
-  index_path: "kiosk/data/index.json"
+  vector_store: "chroma"
+  index_path: "kiosk/data/chroma"
+  collection_name: "kiosk_kb"
+  converted_text_dir: "kiosk/data/converted_text"
   top_k: 4
 
 llm:
