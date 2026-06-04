@@ -1,11 +1,15 @@
 stt:
+  # Use "openai-whisper", "whisper.cpp", or "mms-cebuano" for offline Meta MMS ASR.
   engine: "openai-whisper"
   cli_path: "whisper"
   model_name: "medium"
+  mms_model_name: "facebook/mms-1b-l1107"
   model_dir: "kiosk/models/whisper"
   model_path: ""
   ffmpeg_path: ""
   language: null
+  mms_language: "ceb"
+  local_files_only: true
   task: "transcribe"
   sample_rate: 16000
   channels: 1
@@ -15,10 +19,7 @@ stt:
 
 rag:
   embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
-  vector_store: "chroma"
-  index_path: "kiosk/data/chroma"
-  collection_name: "kiosk_kb"
-  converted_text_dir: "kiosk/data/converted_text"
+  index_path: "kiosk/data/index.json"
   top_k: 4
 
 llm:
@@ -35,15 +36,19 @@ ollama:
   system: "You are a concise kiosk assistant. If the user speaks Cebuano or mixed Cebuano and English, respond naturally in the same style. Answer only the current user message."
 
 tts:
-  # Use Piper on Windows and Raspberry Pi.
-  # Leave binary_path empty to auto-detect:
-  #   Windows: kiosk/models/piper/bin/piper.exe or piper.exe on PATH
-  #   Linux/Raspberry Pi: kiosk/models/piper/bin/piper or piper on PATH
-  engine: "piper"
-  binary_path: ""
+  # Use "windows-sapi", "piper", or "mms-cebuano" for offline Meta MMS Cebuano.
+  engine: "mms-cebuano"
+  binary_path: "kiosk/models/piper/bin/piper.exe"
   voice_path: "kiosk/models/piper/voices/en_US-amy-medium.onnx"
+  model_name: "facebook/mms-1b-l1107"
+  mms_language: "ceb"
+  local_files_only: true
   output_file: "kiosk/data/last_response.wav"
-  playback_command: "auto"
+  playback_command:
+    - "powershell.exe"
+    - "-NoProfile"
+    - "-Command"
+    - "& { param($wav) (New-Object Media.SoundPlayer $wav).PlaySync() }"
   extra_args: []
 
 thresholds:
