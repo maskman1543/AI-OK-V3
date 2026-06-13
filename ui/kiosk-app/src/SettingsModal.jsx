@@ -19,7 +19,7 @@ export default function SettingsModal({ onClose }) {
   const CORRECT_PIN = '1234'
 
   function handlePinInput(num) {
-    if (pin.length < 4) {
+    if (pin.length < 4) 
       setPin(prev => prev + num)
       setPinError(false)
     }
@@ -229,4 +229,3 @@ export default function SettingsModal({ onClose }) {
       </div>
     </div>
   )
-}
