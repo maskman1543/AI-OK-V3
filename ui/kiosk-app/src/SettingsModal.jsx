@@ -123,8 +123,11 @@ export default function SettingsModal({ onClose }) {
             <div className="max-w-xs mx-auto flex flex-col items-center">
               <p className="text-white/60 mb-6 text-center">Enter 4-digit PIN to access kiosk configurations.</p>
 
+
               <div className={`flex gap-3 mb-8 ${pinError ? 'animate-pulse' : ''}`}>
                 {[0, 1, 2, 3].map(i => (
+                  <div
+                    key={i}
                   <div
                     key={i}
                     className={`w-12 h-14 rounded-xl border-2 flex items-center justify-center text-2xl
@@ -132,7 +135,7 @@ export default function SettingsModal({ onClose }) {
                       ${pinError ? 'border-red-500 bg-red-500/10' : ''}
                     `}
                   >
-                    {pin[i] ? '•' : ''}
+                    {pin[i] ? '*' : ''}
                   </div>
                 ))}
               </div>
@@ -143,12 +146,16 @@ export default function SettingsModal({ onClose }) {
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
                   <button
                     key={num}
+                  <button
+                    key={num}
                     onClick={() => handlePinInput(num.toString())}
                     className="py-4 bg-white/5 hover:bg-white/10 rounded-xl text-xl font-semibold transition-colors"
                   >
                     {num}
                   </button>
                 ))}
+                <button
+                  onClick={() => { setPin(''); setPinError(false) }}
                 <button
                   onClick={() => { setPin(''); setPinError(false) }}
                   className="py-4 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl font-semibold transition-colors"
@@ -162,6 +169,7 @@ export default function SettingsModal({ onClose }) {
                 >
                   0
                 </button>
+                <button
                 <button
                   onClick={submitPin}
                   disabled={pin.length < 4}
@@ -256,12 +264,20 @@ export default function SettingsModal({ onClose }) {
                 <h3 className="text-lg font-semibold mb-4">Hardware Diagnostics</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                    <span className="block text-sm text-white/50 mb-1">Ollama Status</span>
-                    <span className="text-teal-400 font-semibold">Connected (localhost:11434)</span>
+                    <span className="block text-sm text-white/50 mb-1">Ollama Host</span>
+                    <span className="text-teal-400 font-semibold">{systemStatus?.ollama?.host || '---'}</span>
                   </div>
                   <div className="bg-white/5 p-4 rounded-xl border border-white/10">
                     <span className="block text-sm text-white/50 mb-1">Active Model</span>
-                    <span className="font-semibold">---</span>
+                    <span className="font-semibold">{systemStatus?.ollama?.model || '---'}</span>
+                  </div>
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                    <span className="block text-sm text-white/50 mb-1">TTS Engine</span>
+                    <span className="font-semibold">{systemStatus?.tts?.engine || '---'}</span>
+                  </div>
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                    <span className="block text-sm text-white/50 mb-1">RAG Index</span>
+                    <span className="font-semibold">{systemStatus?.rag?.index_path || '---'}</span>
                   </div>
                 </div>
               </section>

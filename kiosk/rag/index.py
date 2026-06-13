@@ -1,9 +1,4 @@
-"""Vector index wrapper.
-
-This file keeps the kiosk pipeline independent from the backing store. The
-default JSON index is simple and portable; swap this class for ChromaDB or
-FAISS when the deployment dependency is available.
-"""
+"""Vector index wrappers."""
 
 from __future__ import annotations
 
@@ -74,6 +69,97 @@ class VectorIndex:
                 )
             )
         return sorted(scored, key=lambda hit: hit.score, reverse=True)[:top_k]
+
+
+class ChromaVectorIndex:
+    """Persistent ChromaDB index using caller-provided embeddings."""
+
+    def __init__(
+        self,
+        persist_path: str | Path = "kiosk/data/chroma",
+        collection_name: str = "kiosk_kb",
+        reset: bool = False,
+    ) -> None:
+        self.persist_path = Path(persist_path)
+        self.collection_name = collection_name
+        self.reset = reset
+        self._client = None
+        self._collection = None
+
+    @classmethod
+    def load(
+        cls,
+        persist_path: str | Path = "kiosk/data/chroma",
+        collection_name: str = "kiosk_kb",
+    ) -> "ChromaVectorIndex":
+        return cls(persist_path=persist_path, collection_name=collection_name)
+
+    def add(
+        self,
+        ids: list[str],
+        texts: list[str],
+        embeddings: list[list[float]],
+        metadatas: list[dict[str, Any]] | None = None,
+    ) -> None:
+        if not texts:
+            return
+        self._get_collection().add(
+            ids=ids,
+            documents=texts,
+            embeddings=embeddings,
+            metadatas=metadatas or [{} for _ in texts],
+        )
+
+    def save(self, path: str | Path | None = None) -> None:
+        # PersistentClient writes changes as they are made.
+        self.persist_path.mkdir(parents=True, exist_ok=True)
+
+    def search(self, query_embedding: list[float], top_k: int = 4) -> list[SearchHit]:
+        results = self._get_collection().query(
+            query_embeddings=[query_embedding],
+            n_results=top_k,
+            include=["documents", "distances", "metadatas"],
+        )
+        hits: list[SearchHit] = []
+        for doc_id, text, distance, metadata in zip(
+            results.get("ids", [[]])[0],
+            results.get("documents", [[]])[0],
+            results.get("distances", [[]])[0],
+            results.get("metadatas", [[]])[0],
+        ):
+            hits.append(
+                SearchHit(
+                    id=doc_id,
+                    text=text,
+                    score=1.0 - float(distance),
+                    metadata=metadata or {},
+                )
+            )
+        return hits
+
+    def _get_collection(self):
+        if self._collection is not None:
+            return self._collection
+
+        try:
+            import chromadb
+        except ImportError as exc:  # pragma: no cover - depends on deployment
+            raise RuntimeError("Install chromadb to use the Chroma vector store") from exc
+
+        self.persist_path.mkdir(parents=True, exist_ok=True)
+        self._client = chromadb.PersistentClient(path=str(self.persist_path))
+        if self.reset:
+            try:
+                self._client.delete_collection(self.collection_name)
+            except Exception:
+                pass
+            self.reset = False
+
+        self._collection = self._client.get_or_create_collection(
+            name=self.collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
+        return self._collection
 
 
 def _cosine_similarity(left: list[float], right: list[float]) -> float:
