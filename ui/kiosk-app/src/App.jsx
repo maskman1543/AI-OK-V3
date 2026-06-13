@@ -79,6 +79,7 @@ export default function App() {
   function openSettings() {
     setShowSettings(true)
     setShowKb(false) // Hide keyboard when opening settings
+    
   }
 
   return (

@@ -19,7 +19,7 @@ export default function SettingsModal({ onClose }) {
   const CORRECT_PIN = '1234'
 
   function handlePinInput(num) {
-    if (pin.length < 4) 
+    if (pin.length < 4) {
       setPin(prev => prev + num)
       setPinError(false)
     }
@@ -73,6 +73,7 @@ export default function SettingsModal({ onClose }) {
     // Clear the input so the exact same file can be uploaded again if needed
     event.target.value = '' 
   }
+  
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6 text-white">
@@ -229,3 +230,4 @@ export default function SettingsModal({ onClose }) {
       </div>
     </div>
   )
+}
