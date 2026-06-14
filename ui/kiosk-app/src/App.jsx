@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { Mic, X, Settings } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Mic, X, Settings, Volume2 } from 'lucide-react'
 import Keyboard from 'react-simple-keyboard'
 import 'react-simple-keyboard/build/css/index.css'
 import SettingsModal from './SettingsModal'
@@ -12,8 +12,22 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false)
   const [layoutName, setLayoutName] = useState('default')
   const [showSettings, setShowSettings] = useState(false)
+  const [selectedInputDevice, setSelectedInputDevice] = useState('')
+  const [speakResponses, setSpeakResponses] = useState(true)
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem('kiosk-selected-input-device')
+    if (saved) {
+      setSelectedInputDevice(saved)
+    }
+    const savedSpeak = window.localStorage.getItem('kiosk-speak-responses')
+    if (savedSpeak !== null) {
+      setSpeakResponses(savedSpeak === 'true')
+    }
+  }, [])
 
   const kbRef = useRef(null)
+  const AUTO_SEND_TRANSCRIPT = true // set false to require pressing Ask after transcription
 
   function onKbChange(val) {
     setInput(val)
@@ -30,7 +44,7 @@ export default function App() {
   async function handleSubmit() {
     if (!input.trim()) return
     setResponse('Thinking...')
-    setStatus('LLM and TTS are running.')
+    setStatus('LLM is running.')
     setShowKb(false)
 
     try {
@@ -39,12 +53,18 @@ export default function App() {
       }
       const data = await window.kioskAPI.ask(input, { speak: false })
       setResponse(data.answer || 'No response.')
-      setStatus(data.runtimes?.total ? `Answer ready in ${data.runtimes.total.toFixed(1)}s. Speaking...` : 'Speaking...')
-      if (data.answer && window.kioskAPI?.speak) {
-        await window.kioskAPI.speak(data.answer)
-        setStatus(data.runtimes?.total ? `Done in ${data.runtimes.total.toFixed(1)}s` : '')
-      } else {
-        setStatus(data.runtimes?.total ? `Done in ${data.runtimes.total.toFixed(1)}s` : '')
+
+      setStatus(data.runtimes?.total ? `Answer ready in ${data.runtimes.total.toFixed(1)}s.` : 'Answer ready.')
+
+      if (speakResponses && data.answer && window.kioskAPI?.speak) {
+        try {
+          setStatus(data.runtimes?.total ? `Answer ready in ${data.runtimes.total.toFixed(1)}s. Speaking...` : 'Speaking...')
+          await window.kioskAPI.speak(data.answer)
+          setStatus(data.runtimes?.total ? `Done in ${data.runtimes.total.toFixed(1)}s` : '')
+        } catch (ttsErr) {
+          console.error('TTS failed:', ttsErr)
+          setStatus('TTS failed — answer displayed above.')
+        }
       }
     } catch (error) {
       setResponse(error.message || 'Could not reach the kiosk backend.')
@@ -72,21 +92,27 @@ export default function App() {
       if (!isRecording) {
         setIsRecording(true)
         setShowKb(false)
-        setResponse('')
+        setResponse('Recording...')
         setStatus('Recording. Press the mic again to stop.')
-        await window.kioskAPI.startRecording()
+        await window.kioskAPI.startRecording(selectedInputDevice || undefined)
         return
       }
 
       setIsRecording(false)
-      setStatus('Transcribing...')
+      setResponse('Transcribing...')
+      setStatus('Transcribing audio...')
       const data = await window.kioskAPI.stopRecording()
-      setInput(data.transcript || '')
+      const transcript = data.transcript || ''
+      setInput(transcript)
       if (kbRef.current) {
-        kbRef.current.setInput(data.transcript || '')
+        kbRef.current.setInput(transcript)
       }
-      setResponse('')
-      setStatus('Transcript ready. Press Ask to send it.')
+      if (AUTO_SEND_TRANSCRIPT && transcript.trim()) {
+        setStatus('Sending transcript...')
+        await handleSubmit()
+      } else {
+        setStatus('Transcript ready. Press Ask to send it.')
+      }
     } catch (error) {
       setIsRecording(false)
       setResponse(error.message || 'Voice transcription failed.')
@@ -134,16 +160,16 @@ export default function App() {
 
       <main className="flex-1 flex flex-col items-center px-10 py-6 gap-6 overflow-hidden">
         <div className="flex-1 w-full max-w-3xl flex flex-col justify-end overflow-hidden">
-          {response ? (
-            <div className="bg-white/5 rounded-3xl p-8 text-base leading-relaxed overflow-y-auto">
+          <div className="bg-white/5 rounded-3xl p-8 text-base leading-relaxed overflow-y-auto">
+            {response ? (
               <p>{response}</p>
-              {status && <p className="mt-4 text-sm text-white/40">{status}</p>}
-            </div>
-          ) : (
-            <p className="text-xl font-semibold text-white/60 mb-auto">
-              How can I help you?
-            </p>
-          )}
+            ) : (
+              <p className="text-xl font-semibold text-white/60 mb-0">
+                How can I help you?
+              </p>
+            )}
+            {status && <p className="mt-4 text-sm text-white/40">{status}</p>}
+          </div>
         </div>
 
         <div className="w-full max-w-3xl flex gap-4 shrink-0 pb-2">
@@ -173,6 +199,18 @@ export default function App() {
 
           <button onClick={handleSubmit} className="px-6 py-4 bg-teal-500 rounded-2xl font-bold hover:bg-teal-400">Ask</button>
           <button onClick={handleClear} className="px-6 py-4 bg-white/10 rounded-2xl font-bold hover:bg-white/20">Clear</button>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !speakResponses
+              setSpeakResponses(next)
+              window.localStorage.setItem('kiosk-speak-responses', String(next))
+            }}
+            className={`px-4 py-4 rounded-2xl font-bold transition-colors ${speakResponses ? 'bg-blue-500 text-white hover:bg-blue-400' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+            title={speakResponses ? 'Speech enabled' : 'Speech disabled'}
+          >
+            <Volume2 size={20} />
+          </button>
         </div>
       </main>
 
@@ -226,7 +264,16 @@ export default function App() {
         </div>
       )}
 
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          selectedInputDevice={selectedInputDevice}
+          onSelectedInputDeviceChange={deviceId => {
+            setSelectedInputDevice(deviceId)
+            window.localStorage.setItem('kiosk-selected-input-device', deviceId)
+          }}
+        />
+      )}
     </div>
   )
 }

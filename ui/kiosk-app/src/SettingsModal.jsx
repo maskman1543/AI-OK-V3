@@ -1,15 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Lock, Database, FileText, Trash2, UploadCloud, Mic, Volume2 } from 'lucide-react'
 
-export default function SettingsModal({ onClose }) {
+export default function SettingsModal({ onClose, selectedInputDevice, onSelectedInputDeviceChange }) {
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState(false)
 
   const [inputDevices, setInputDevices] = useState([])
   const [outputDevices, setOutputDevices] = useState([])
-  const [selectedInput, setSelectedInput] = useState('')
+  const [selectedInput, setSelectedInput] = useState(selectedInputDevice || '')
   const [selectedOutput, setSelectedOutput] = useState('')
+
+  const [systemStatus, setSystemStatus] = useState(null)
+  const [ingestStatus, setIngestStatus] = useState('')
+  const [ingestInProgress, setIngestInProgress] = useState(false)
 
   const fileInputRef = useRef(null)
 
@@ -26,27 +30,34 @@ export default function SettingsModal({ onClose }) {
     if (!isUnlocked) return
 
     async function fetchDevices() {
-      // FIX 2: Request permission first, but always enumerate regardless of outcome
+      // Request permission first, but always enumerate regardless of outcome
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        // Release the stream immediately — we only needed it to unlock device labels
         stream.getTracks().forEach(t => t.stop())
       } catch {
-        // Permission denied or not supported — labels may be generic, that's fine
+        // Permission denied or not supported — labels may be generic
       }
 
       try {
         const devices = await navigator.mediaDevices.enumerateDevices()
 
-        // FIX 3: Use index-based fallback labels for Linux/ALSA where labels are empty
         const inputs = devices.filter(d => d.kind === 'audioinput')
         const outputs = devices.filter(d => d.kind === 'audiooutput')
 
         setInputDevices(inputs)
         setOutputDevices(outputs)
 
-        setSelectedInput(prev => prev || inputs[0]?.deviceId || '')
+        setSelectedInput(prev => prev || selectedInputDevice || inputs[0]?.deviceId || '')
         setSelectedOutput(prev => prev || outputs[0]?.deviceId || '')
+
+        try {
+          if (window.kioskAPI?.getStatus) {
+            const status = await window.kioskAPI.getStatus()
+            setSystemStatus(status)
+          }
+        } catch (err) {
+          console.error('Failed to fetch system status:', err)
+        }
       } catch (err) {
         console.error('Failed to enumerate media devices:', err)
       }
@@ -78,23 +89,68 @@ export default function SettingsModal({ onClose }) {
     setFiles(files.filter(f => f.id !== id))
   }
 
-  function triggerFileDialog() {
-    fileInputRef.current?.click()
+  async function triggerFileDialog() {
+    if (!window.kioskAPI?.selectAndIngestDocuments) {
+      setIngestStatus('Ingestion is unavailable in this build.')
+      return
+    }
+
+    setIngestStatus('Opening document picker...')
+    setIngestInProgress(true)
+
+    try {
+      const result = await window.kioskAPI.selectAndIngestDocuments()
+      if (!result) {
+        setIngestStatus('Ingestion failed: no response from backend.')
+        return
+      }
+
+      if (result.canceled) {
+        setIngestStatus('Document selection canceled.')
+        return
+      }
+
+      if (result.ok) {
+        const uploadedFiles = result.paths || []
+        setFiles(prev => [
+          ...prev,
+          ...uploadedFiles.map((path, index) => ({
+            id: Date.now() + index,
+            name: path.split(/[/\\]/).pop() || path,
+            size: '',
+          })),
+        ])
+        setIngestStatus(`Ingested ${result.chunkCount} chunk(s) from ${uploadedFiles.length} file(s).`)
+        return
+      }
+
+      setIngestStatus(`Ingestion failed: ${result.error || 'Unknown error.'}`)
+    } catch (err) {
+      setIngestStatus(`Ingestion failed: ${err?.message || err}`)
+    } finally {
+      setIngestInProgress(false)
+    }
   }
 
   function handleFileSelected(event) {
-    const selectedFile = event.target.files[0]
-    if (!selectedFile) return
-
-    const bytes = selectedFile.size
-    const sizeStr =
-      bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
-      : bytes >= 1_024   ? `${(bytes / 1_024).toFixed(0)} KB`
-      : `${bytes} Bytes`
-
-    setFiles(prev => [...prev, { id: Date.now(), name: selectedFile.name, size: sizeStr }])
-    event.target.value = ''
+    const files = event.target.files
+    if (!files || files.length === 0) {
+      return
+    }
+    setFiles(prev => [
+      ...prev,
+      ...Array.from(files).map((file, index) => ({
+        id: Date.now() + index,
+        name: file.name,
+        size: `${(file.size / 1024).toFixed(1)} KB`,
+      })),
+    ])
+    setIngestStatus(`Added ${files.length} local file(s) for later ingestion.`)
   }
+
+  useEffect(() => {
+    setSelectedInput(selectedInputDevice || '')
+  }, [selectedInputDevice])
 
   // Helper: produce a readable label for a device even when the browser returns an empty string
   function deviceLabel(device, kind, index) {
@@ -128,8 +184,6 @@ export default function SettingsModal({ onClose }) {
                 {[0, 1, 2, 3].map(i => (
                   <div
                     key={i}
-                  <div
-                    key={i}
                     className={`w-12 h-14 rounded-xl border-2 flex items-center justify-center text-2xl
                       ${pin[i] ? 'border-teal-400 bg-teal-400/10' : 'border-white/20 bg-white/5'}
                       ${pinError ? 'border-red-500 bg-red-500/10' : ''}
@@ -146,16 +200,12 @@ export default function SettingsModal({ onClose }) {
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
                   <button
                     key={num}
-                  <button
-                    key={num}
                     onClick={() => handlePinInput(num.toString())}
                     className="py-4 bg-white/5 hover:bg-white/10 rounded-xl text-xl font-semibold transition-colors"
                   >
                     {num}
                   </button>
                 ))}
-                <button
-                  onClick={() => { setPin(''); setPinError(false) }}
                 <button
                   onClick={() => { setPin(''); setPinError(false) }}
                   className="py-4 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl font-semibold transition-colors"
@@ -170,7 +220,6 @@ export default function SettingsModal({ onClose }) {
                   0
                 </button>
                 <button
-                <button
                   onClick={submitPin}
                   disabled={pin.length < 4}
                   className="py-4 bg-teal-500 text-white hover:bg-teal-400 disabled:opacity-50 disabled:hover:bg-teal-500 rounded-xl font-semibold transition-colors"
@@ -183,15 +232,25 @@ export default function SettingsModal({ onClose }) {
             <div className="flex flex-col gap-8">
 
               <section>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col gap-3 mb-4">
                   <div>
                     <h3 className="text-lg font-semibold">Knowledge Base Directory</h3>
                     <p className="text-sm text-white/50">Documents the AI uses to answer user questions.</p>
                   </div>
-                  <input type="file" ref={fileInputRef} onChange={handleFileSelected} className="hidden" accept=".pdf,.doc,.docx,.txt" />
-                  <button onClick={triggerFileDialog} className="flex items-center gap-2 px-4 py-2 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 rounded-xl font-semibold transition-colors text-sm">
-                    <UploadCloud size={18} /> Upload
-                  </button>
+                  <div className="flex items-center justify-between gap-4">
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelected} className="hidden" accept=".pdf,.doc,.docx,.txt" />
+                    <button
+                      onClick={triggerFileDialog}
+                      disabled={ingestInProgress}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition-colors ${ingestInProgress ? 'bg-white/10 text-white/40 cursor-not-allowed' : 'bg-teal-500/10 text-teal-400 hover:bg-teal-500/20'}`}
+                    >
+                      <UploadCloud size={18} />
+                      {ingestInProgress ? 'Ingesting…' : 'Upload'}
+                    </button>
+                  </div>
+                  {ingestStatus && (
+                    <p className="text-sm text-white/60">{ingestStatus}</p>
+                  )}
                 </div>
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                   {files.length === 0 ? (
@@ -227,8 +286,15 @@ export default function SettingsModal({ onClose }) {
                     <label className="text-sm text-white/50 flex items-center gap-2">
                       <Mic size={16} className="text-teal-400" /> Input Device (Microphone)
                     </label>
-                    <select value={selectedInput} onChange={e => setSelectedInput(e.target.value)}
-                      className="bg-gray-800 text-white rounded-lg p-2 border border-white/10 text-sm focus:outline-none focus:border-teal-400 w-full">
+                    <select
+                      value={selectedInput}
+                      onChange={e => {
+                        const value = e.target.value
+                        setSelectedInput(value)
+                        onSelectedInputDeviceChange?.(value)
+                      }}
+                      className="bg-gray-800 text-white rounded-lg p-2 border border-white/10 text-sm focus:outline-none focus:border-teal-400 w-full"
+                    >
                       {inputDevices.length === 0
                         ? <option value="">No input devices found</option>
                         : inputDevices.map((d, i) => (

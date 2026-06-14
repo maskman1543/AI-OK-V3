@@ -106,13 +106,20 @@ ipcMain.handle('kiosk:listen', async (_event, { duration = 5, speak = false }) =
   return runBridge(['listen', '--duration', String(duration), speak ? '--speak' : '--no-speak'])
 })
 
-ipcMain.handle('kiosk:start-recording', async () => {
+ipcMain.handle('kiosk:start-recording', async (_event, device) => {
   if (activeRecording) {
     return { ok: true, alreadyRecording: true }
   }
 
-  console.log('[kiosk-ui] python -m kiosk.ui_bridge record-transcribe --device 2')
-  const child = spawn(pythonExecutable, ['-m', 'kiosk.ui_bridge', 'record-transcribe', '--device', '2'], {
+  const args = ['-m', 'kiosk.ui_bridge', 'record-transcribe']
+  if (device) {
+    args.push('--device', String(device))
+    console.log(`[kiosk-ui] python -m kiosk.ui_bridge record-transcribe --device ${device}`)
+  } else {
+    console.log('[kiosk-ui] python -m kiosk.ui_bridge record-transcribe')
+  }
+
+  const child = spawn(pythonExecutable, args, {
     cwd: projectRoot,
     windowsHide: true,
     stdio: ['pipe', 'pipe', 'pipe'],

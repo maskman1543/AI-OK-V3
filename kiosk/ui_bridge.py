@@ -63,7 +63,7 @@ def listen_once(duration_seconds: float, speak: bool = False) -> dict[str, Any]:
     }
 
 
-def record_until_stopped(device: int | str | None = 2) -> dict[str, Any]:
+def record_until_stopped(device: int | str | None = None) -> dict[str, Any]:
     _log(f"push-to-talk recording started, device={device}")
     assistant = VoiceAssistantOrchestrator(config_path=DEFAULT_CONFIG)
     audio_path = assistant.start_recording(device=device)
@@ -141,7 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     listen_parser.add_argument("--no-speak", dest="speak", action="store_false")
 
     record_parser = subparsers.add_parser("record-transcribe")
-    record_parser.add_argument("--device", default=2)
+    record_parser.add_argument("--device", default=None)
 
     speak_parser = subparsers.add_parser("speak")
     speak_parser.add_argument("--text", required=True)
