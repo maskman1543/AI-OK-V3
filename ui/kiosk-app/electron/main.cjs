@@ -106,18 +106,14 @@ ipcMain.handle('kiosk:listen', async (_event, { duration = 5, speak = false }) =
   return runBridge(['listen', '--duration', String(duration), speak ? '--speak' : '--no-speak'])
 })
 
-ipcMain.handle('kiosk:start-recording', async (_event, device) => {
+// REMOVED `device` ARGUMENT HERE
+ipcMain.handle('kiosk:start-recording', async (_event) => {
   if (activeRecording) {
     return { ok: true, alreadyRecording: true }
   }
 
   const args = ['-m', 'kiosk.ui_bridge', 'record-transcribe']
-  if (device) {
-    args.push('--device', String(device))
-    console.log(`[kiosk-ui] python -m kiosk.ui_bridge record-transcribe --device ${device}`)
-  } else {
-    console.log('[kiosk-ui] python -m kiosk.ui_bridge record-transcribe')
-  }
+  console.log('[kiosk-ui] python -m kiosk.ui_bridge record-transcribe')
 
   const child = spawn(pythonExecutable, args, {
     cwd: projectRoot,

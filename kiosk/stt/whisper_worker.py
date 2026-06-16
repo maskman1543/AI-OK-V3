@@ -50,6 +50,46 @@ class WhisperWorker:
             config = yaml.safe_load(config_file) or {}
         return cls(config.get("stt", {}))
 
+    def _get_native_sample_rate(self, device: int | str | None) -> int:
+        """Fetch the hardware's native sample rate to prevent PortAudio crashes."""
+        import sounddevice as sd
+        if device is None:
+            device_info = sd.query_devices(kind='input')
+        else:
+            device_info = sd.query_devices(device)
+        return int(device_info['default_samplerate'])
+
+    def _resample_to_target(self, output_path: Path, recorded_sr: int) -> Path:
+        """Resample the recorded audio to the target Whisper sample rate (16000) if necessary."""
+        if recorded_sr == self.sample_rate:
+            return output_path
+            
+        ffmpeg_path = self._resolve_ffmpeg()
+        if not ffmpeg_path:
+            # If no FFmpeg is found, return the raw file and hope the engine handles it
+            return output_path
+            
+        temp_path = output_path.with_name(f"{output_path.stem}_resampled{output_path.suffix}")
+        
+        command = [
+            ffmpeg_path,
+            "-y",               # Overwrite without asking
+            "-i", str(output_path),
+            "-ar", str(self.sample_rate),
+            "-ac", str(self.channels),
+            str(temp_path)
+        ]
+        
+        try:
+            subprocess.run(command, check=True, capture_output=True)
+            temp_path.replace(output_path) # Overwrite the original with the resampled 16k version
+        except subprocess.CalledProcessError as e:
+            print(f"[WhisperWorker] FFmpeg resampling failed: {e.stderr.decode('utf-8', errors='ignore')}")
+            if temp_path.exists():
+                temp_path.unlink()
+                
+        return output_path
+
     def record_microphone(
         self,
         output_path: str | Path | None = None,
@@ -71,14 +111,17 @@ class WhisperWorker:
         output = Path(output_path) if output_path else self._default_recording_path()
         output.parent.mkdir(parents=True, exist_ok=True)
         input_device = _parse_device(device)
+        
+        # Dynamically adapt to hardware limitations
+        native_sr = self._get_native_sample_rate(input_device)
 
-        frames_remaining = int(duration_seconds * self.sample_rate)
-        block_size = min(self.sample_rate, frames_remaining)
+        frames_remaining = int(duration_seconds * native_sr)
+        block_size = min(native_sr, frames_remaining)
 
         with wave.open(str(output), "wb") as wav_file:
             wav_file.setnchannels(self.channels)
             wav_file.setsampwidth(self.sample_width)
-            wav_file.setframerate(self.sample_rate)
+            wav_file.setframerate(native_sr)
 
             def callback(indata, frame_count, _time, status) -> None:
                 nonlocal frames_remaining
@@ -90,7 +133,7 @@ class WhisperWorker:
                     raise sd.CallbackStop
 
             with sd.RawInputStream(
-                samplerate=self.sample_rate,
+                samplerate=native_sr,
                 blocksize=block_size,
                 device=input_device,
                 channels=self.channels,
@@ -99,7 +142,8 @@ class WhisperWorker:
             ):
                 sd.sleep(int(duration_seconds * 1000) + 250)
 
-        return output
+        # Seamlessly convert to 16k for Whisper
+        return self._resample_to_target(output, native_sr)
 
     def record_until_stop(
         self,
@@ -119,20 +163,22 @@ class WhisperWorker:
         output = Path(output_path) if output_path else self._default_recording_path()
         output.parent.mkdir(parents=True, exist_ok=True)
         input_device = _parse_device(device)
+        
+        native_sr = self._get_native_sample_rate(input_device)
 
         with wave.open(str(output), "wb") as wav_file:
             wav_file.setnchannels(self.channels)
             wav_file.setsampwidth(self.sample_width)
-            wav_file.setframerate(self.sample_rate)
+            wav_file.setframerate(native_sr)
 
             def callback(indata, _frame_count, _time, status) -> None:
                 if status:
                     print(status)
                 wav_file.writeframes(indata)
 
-            block_size = min(1024, self.sample_rate)
+            block_size = min(1024, native_sr)
             with sd.RawInputStream(
-                samplerate=self.sample_rate,
+                samplerate=native_sr,
                 blocksize=block_size,
                 device=input_device,
                 channels=self.channels,
@@ -142,7 +188,7 @@ class WhisperWorker:
                 while not stop_event.is_set():
                     sd.sleep(100)
 
-        return output
+        return self._resample_to_target(output, native_sr)
 
     def transcribe_microphone(
         self,
@@ -234,9 +280,17 @@ class WhisperWorker:
         configured = Path(self.cli_path)
         if configured.exists():
             return str(configured)
-        venv_cli = Path("venv") / "Scripts" / f"{self.cli_path}.exe"
-        if venv_cli.exists():
-            return str(venv_cli)
+            
+        # Check Linux/macOS venv path
+        linux_cli = Path("venv") / "bin" / self.cli_path
+        if linux_cli.exists():
+            return str(linux_cli)
+            
+        # Check Windows venv path
+        win_cli = Path("venv") / "Scripts" / f"{self.cli_path}.exe"
+        if win_cli.exists():
+            return str(win_cli)
+            
         raise RuntimeError(f"Whisper CLI not found: {self.cli_path}")
 
     def _default_recording_path(self) -> Path:

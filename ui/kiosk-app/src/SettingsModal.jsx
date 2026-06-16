@@ -1,15 +1,22 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Lock, Database, FileText, Trash2, UploadCloud, Mic, Volume2 } from 'lucide-react'
 
-export default function SettingsModal({ onClose, selectedInputDevice, onSelectedInputDeviceChange }) {
+export default function SettingsModal({ 
+  onClose, 
+  selectedInputDevice, 
+  onSelectedInputDeviceChange,
+  selectedOutputDevice,         
+  onSelectedOutputDeviceChange  
+}) {
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState(false)
 
   const [inputDevices, setInputDevices] = useState([])
   const [outputDevices, setOutputDevices] = useState([])
+  
   const [selectedInput, setSelectedInput] = useState(selectedInputDevice || '')
-  const [selectedOutput, setSelectedOutput] = useState('')
+  const [selectedOutput, setSelectedOutput] = useState(selectedOutputDevice || '')
 
   const [systemStatus, setSystemStatus] = useState(null)
   const [ingestStatus, setIngestStatus] = useState('')
@@ -30,7 +37,6 @@ export default function SettingsModal({ onClose, selectedInputDevice, onSelected
     if (!isUnlocked) return
 
     async function fetchDevices() {
-      // Request permission first, but always enumerate regardless of outcome
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         stream.getTracks().forEach(t => t.stop())
@@ -48,7 +54,7 @@ export default function SettingsModal({ onClose, selectedInputDevice, onSelected
         setOutputDevices(outputs)
 
         setSelectedInput(prev => prev || selectedInputDevice || inputs[0]?.deviceId || '')
-        setSelectedOutput(prev => prev || outputs[0]?.deviceId || '')
+        setSelectedOutput(prev => prev || selectedOutputDevice || outputs[0]?.deviceId || '')
 
         try {
           if (window.kioskAPI?.getStatus) {
@@ -66,7 +72,7 @@ export default function SettingsModal({ onClose, selectedInputDevice, onSelected
     fetchDevices()
     navigator.mediaDevices.addEventListener('devicechange', fetchDevices)
     return () => navigator.mediaDevices.removeEventListener('devicechange', fetchDevices)
-  }, [isUnlocked])
+  }, [isUnlocked, selectedInputDevice, selectedOutputDevice])
 
   function handlePinInput(num) {
     if (pin.length < 4) {
@@ -152,11 +158,13 @@ export default function SettingsModal({ onClose, selectedInputDevice, onSelected
     setSelectedInput(selectedInputDevice || '')
   }, [selectedInputDevice])
 
-  // Helper: produce a readable label for a device even when the browser returns an empty string
+  useEffect(() => {
+    setSelectedOutput(selectedOutputDevice || '')
+  }, [selectedOutputDevice])
+
   function deviceLabel(device, kind, index) {
     if (device.label) return device.label
     const prefix = kind === 'audioinput' ? 'Microphone' : 'Speaker'
-    // Show a short ID fragment so admins can distinguish devices
     return `${prefix} ${index + 1} (…${device.deviceId.slice(-8)})`
   }
 
@@ -178,7 +186,6 @@ export default function SettingsModal({ onClose, selectedInputDevice, onSelected
           {!isUnlocked ? (
             <div className="max-w-xs mx-auto flex flex-col items-center">
               <p className="text-white/60 mb-6 text-center">Enter 4-digit PIN to access kiosk configurations.</p>
-
 
               <div className={`flex gap-3 mb-8 ${pinError ? 'animate-pulse' : ''}`}>
                 {[0, 1, 2, 3].map(i => (
@@ -212,7 +219,6 @@ export default function SettingsModal({ onClose, selectedInputDevice, onSelected
                 >
                   CLR
                 </button>
-                {/* FIX 1: was onClick={handlePinInput('0')} — called immediately on render */}
                 <button
                   onClick={() => handlePinInput('0')}
                   className="py-4 bg-white/5 hover:bg-white/10 rounded-xl text-xl font-semibold transition-colors"
@@ -309,8 +315,15 @@ export default function SettingsModal({ onClose, selectedInputDevice, onSelected
                     <label className="text-sm text-white/50 flex items-center gap-2">
                       <Volume2 size={16} className="text-teal-400" /> Output Device (Speakers)
                     </label>
-                    <select value={selectedOutput} onChange={e => setSelectedOutput(e.target.value)}
-                      className="bg-gray-800 text-white rounded-lg p-2 border border-white/10 text-sm focus:outline-none focus:border-teal-400 w-full">
+                    <select 
+                      value={selectedOutput} 
+                      onChange={e => {
+                        const value = e.target.value
+                        setSelectedOutput(value)
+                        onSelectedOutputDeviceChange?.(value)
+                      }}
+                      className="bg-gray-800 text-white rounded-lg p-2 border border-white/10 text-sm focus:outline-none focus:border-teal-400 w-full"
+                    >
                       {outputDevices.length === 0
                         ? <option value="">No output devices found</option>
                         : outputDevices.map((d, i) => (
