@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('kioskAPI', {
   platform: process.platform,
   ask: (text, options = {}) => ipcRenderer.invoke('kiosk:ask', { text, ...options }),
   listen: (options = {}) => ipcRenderer.invoke('kiosk:listen', options),
-  startRecording: () => ipcRenderer.invoke('kiosk:start-recording'),
+  startRecording: device => ipcRenderer.invoke('kiosk:start-recording', device),
   stopRecording: () => ipcRenderer.invoke('kiosk:stop-recording'),
   speak: text => ipcRenderer.invoke('kiosk:speak', { text }),
   selectAndIngestDocuments: () => ipcRenderer.invoke('kiosk:select-and-ingest'),

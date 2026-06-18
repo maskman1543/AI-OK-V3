@@ -63,16 +63,62 @@ def listen_once(duration_seconds: float, speak: bool = False) -> dict[str, Any]:
     }
 
 
-def record_until_stopped(device: int | str | None = 2) -> dict[str, Any]:
+def record_until_stopped(device: int | str | None = None) -> dict[str, Any]:
+    import threading
+
     _log(f"push-to-talk recording started, device={device}")
     assistant = VoiceAssistantOrchestrator(config_path=DEFAULT_CONFIG)
-    audio_path = assistant.start_recording(device=device)
-    sys.stdin.readline()
-    assistant.stop_recording()
+
+    stop_event = threading.Event()
+    audio_path_holder: list[Path] = []
+    record_error: list[Exception] = []
+
+    def _record() -> None:
+        try:
+            p = assistant.bridge.stt.record_until_stop(
+                stop_event=stop_event,
+                device=device,
+            )
+            audio_path_holder.append(p)
+        except Exception as exc:  # noqa: BLE001
+            record_error.append(exc)
+
+    thread = threading.Thread(target=_record, daemon=True)
+    thread.start()
+
+    _log("waiting for stop signal on stdin...")
+    line = sys.stdin.readline()
+    _log(f"stop signal received (stdin gave: {line!r})")
+    stop_event.set()
+
+    thread.join(timeout=15)
+
+    if record_error:
+        raise record_error[0]
+
+    if not audio_path_holder:
+        raise RuntimeError("Recording thread did not return an audio path (timed out).")
+
+    audio_path = audio_path_holder[0]
+    size = audio_path.stat().st_size if audio_path.exists() else 0
+    _log(f"audio_path={audio_path}, exists={audio_path.exists()}, size={size} bytes")
+
+    if not audio_path.exists() or size < 1000:
+        raise RuntimeError(
+            f"WAV file is missing or too small ({size} bytes) at {audio_path}. "
+            "Check that the correct microphone input device is selected in Settings."
+        )
+
+    _log("transcribing...")
     transcript = assistant.bridge.stt.transcribe(audio_path).strip()
+    _log(f"transcript ({len(transcript)} chars): {transcript!r}")
+
     if not transcript:
-        raise RuntimeError("Transcript is empty; try recording again closer to the microphone.")
-    _log("push-to-talk transcription complete")
+        raise RuntimeError(
+            f"Whisper returned an empty transcript (WAV size={size} bytes). "
+            "Check ffmpeg is installed, the model is downloaded, and the mic has audio."
+        )
+
     return {
         "ok": True,
         "transcript": transcript,
@@ -141,7 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
     listen_parser.add_argument("--no-speak", dest="speak", action="store_false")
 
     record_parser = subparsers.add_parser("record-transcribe")
-    record_parser.add_argument("--device", default=2)
+    record_parser.add_argument("--device", default=None)
 
     speak_parser = subparsers.add_parser("speak")
     speak_parser.add_argument("--text", required=True)

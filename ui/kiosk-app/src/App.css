@@ -182,3 +182,17 @@
     border-right-color: var(--border);
   }
 }
+
+/* Ensure the simple-keyboard button labels are readable on the dark UI */
+.hg-theme-default .hg-button {
+  /* Make keys dark to match the kiosk theme and ensure contrast */
+  background: #0f1720 !important;
+  color: #000000 !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+.hg-theme-default .hg-button span {
+  color: inherit !important;
+  display: inline-block !important;
+}
